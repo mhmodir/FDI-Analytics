@@ -198,6 +198,49 @@ fdi-analytics/
 
 ---
 
+## Architecture & Deployment
+
+### Technology Stack
+
+The application is built entirely in Python. The frontend and backend are unified in a single Dash application — Dash renders the UI as React components in the browser while the Python backend handles all data processing, ML inference, and callback logic. Styling is handled via a custom CSS stylesheet using a cyan/violet design system with CSS variables for theming.
+
+```
+Browser (React / Plotly)
+        ↕  HTTP
+Python backend (Dash + Flask)
+        ↕
+scikit-learn · SciPy · NumPy · PyTorch (optional)
+        ↕
+diskcache  ←  background callbacks (progress bars, Cancel button)
+```
+
+### Containerisation
+
+The app is packaged as a Docker container for portable, reproducible deployment. The `Dockerfile` uses a Python 3.12 slim base image, installs CPU-only PyTorch from the official wheel index (keeping the image size manageable), and serves the app via **Waitress** (a production WSGI server) with a generous channel timeout to accommodate long-running ML jobs.
+
+### Cloud Deployment — Microsoft Azure
+
+The live app is hosted on **Azure App Service** in the `canadacentral` region (closest to the development location). Key decisions made during deployment:
+
+- **Single instance only** — the diskcache background callback system stores job state on local disk, making horizontal scaling incompatible. Azure App Service (fixed single instance) was chosen over Azure Container Apps (which autoscales by default) for this reason.
+- **Azure Container Registry (ACR)** was provisioned for image storage and evaluated for cloud-side builds (`az acr build`), but ACR Tasks are restricted on the Azure for Students subscription tier. The final pipeline uses `az webapp up` with Azure's Oryx build system, which installs dependencies server-side from `requirements.txt` on each deployment.
+- **B2 tier** (2 vCPU, 3.5 GB RAM) was selected after confirming that the B1 tier (1.75 GB RAM) caused startup timeouts when loading the full ML stack (scikit-learn, SciPy, NumPy) into memory simultaneously on a cold start.
+- **Gunicorn** (pre-installed in Azure's Python runtime image) is used as the production WSGI server with `--workers=1` to maintain diskcache compatibility and `--timeout 600` to handle long-running detection and training jobs.
+
+---
+
+## Roadmap — Version 2
+
+The following improvements are planned for the next release:
+
+- **Bug fixes** — known edge cases identified during v1 testing will be addressed
+- **Execution speed** — optimisation of the feature extraction and detection pipelines for large datasets
+- **LLM interpretation** — richer, more context-aware AI assistant responses with better fault-specific guidance
+- **Causality analysis** — moving beyond correlation-based contribution ranking to causal inference between sensor variables
+- **Report & identification metrics** — an expanded report section with more interpretable fault identification metrics, clearer visualisations, and actionable maintenance recommendations
+
+---
+
 ## License
 
 © 2026 Mohammad Modirrousta. All rights reserved.
